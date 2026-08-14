@@ -502,6 +502,7 @@ def trace_scan(
     mutated_arg_indices: str = "",
 ):
     from torch._dynamo.utils import clone_input
+    from torch._higher_order_ops.partitioner import _make_hop_minimal_decomp_table
 
     with disable_proxy_modes_tracing():
         sample_inits = [clone_input(x_init) for x_init in init]
@@ -510,7 +511,14 @@ def trace_scan(
             clone_input(x) if isinstance(x, torch.Tensor) else x
             for x in additional_inputs
         ]
-        combine_graph = reenter_make_fx(combine_fn)(
+        # Use a minimal decomp table so that reenter_make_fx does not inherit
+        # the outer make_fx tracer's decomposition table (e.g. inductor's
+        # ~1000-entry table). Inheriting that table over-decomposes the combine
+        # graph, causing a different graph structure and wrong backward gradients
+        # when chaining multiple scans under torch.compile(backend="inductor").
+        combine_graph = reenter_make_fx(
+            combine_fn, subgraph_decomp_table=_make_hop_minimal_decomp_table()
+        )(
             *sample_inits, *sample_inputs, *sample_additional_inputs
         )
 
