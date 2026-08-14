@@ -9645,5 +9645,5 @@ if __name__ == "__main__":
     from torch._inductor.test_case import run_tests
 
     # cpp_extension N/A in fbcode
-    if HAS_GPU or sys.platform == "darwin":
+    if HAS_GPU or GPU_TYPE != "cuda" or sys.platform == "darwin":
         run_tests(needs="filelock")
