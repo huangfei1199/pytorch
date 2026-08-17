@@ -741,6 +741,24 @@ def contain_metadata_mutation_ops(module: torch.fx.GraphModule) -> bool:
     return False
 
 
+def contain_while_loop_lowered_ops(module: torch.fx.GraphModule) -> bool:
+    """
+    Checks if the module contains a higher order operator that inductor lowers
+    into an in-place-mutating ``while_loop`` (``scan``, ``map``, or ``while_loop``
+    itself). Buffers from these ops must not be treated as a donatable (freely
+    reusable) buffer.
+    """
+    while_loop_lowered_ops = {
+        getattr(torch.ops.higher_order, name, None)
+        for name in ("scan", "map_impl", "while_loop")
+    }
+    while_loop_lowered_ops.discard(None)
+    for node in module.graph.nodes:
+        if node.op == "call_function" and node.target in while_loop_lowered_ops:
+            return True
+    return False
+
+
 _GRAPHSAFE_RNG_DEVICE_TYPES: set[str] = {"cuda"}
 
 

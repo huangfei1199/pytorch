@@ -91,6 +91,7 @@ from .schemas import (
 from .subclass_utils import compute_inner_mutated_inp_indices_from_subclass_meta
 from .utils import (
     contain_metadata_mutation_ops,
+    contain_while_loop_lowered_ops,
     get_default_generator,
     make_boxed_func,
     simple_wraps,
@@ -640,6 +641,13 @@ def collect_bw_donated_buffer_idxs(
     # Since node.meta["val"] is used to detect donated buffer, we return an empty
     # list if there exists metadata mutation op.
     if contain_metadata_mutation_ops(fw_module) or contain_metadata_mutation_ops(
+        bw_module
+    ):
+        return []
+
+    # HOPs that inductor lowers into an in-place-mutating while_loop (scan, map,
+    # while_loop) mutate their carried buffers in place; do not donate the buffer.
+    if contain_while_loop_lowered_ops(fw_module) or contain_while_loop_lowered_ops(
         bw_module
     ):
         return []

@@ -518,9 +518,7 @@ def trace_scan(
         # when chaining multiple scans under torch.compile(backend="inductor").
         combine_graph = reenter_make_fx(
             combine_fn, subgraph_decomp_table=_make_hop_minimal_decomp_table()
-        )(
-            *sample_inits, *sample_inputs, *sample_additional_inputs
-        )
+        )(*sample_inits, *sample_inputs, *sample_additional_inputs)
 
     outputs = None
     for node in combine_graph.graph.nodes:
