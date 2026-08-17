@@ -307,30 +307,12 @@ class HopJointGraph:
         )
 
 
-# Decomp table matching make_fx(decomposition_table=None): only the two ops
-# that make_fx injects by default. We use this instead of None to prevent
-# _maybe_reenter_make_fx from inheriting a large outer decomp table (e.g.
-# inductor's ~1000-entry table) when scan_autograd is re-invoked inside an
-# outer make_fx trace. Inheriting that table inflates the joint graph, causes
-# a different min-cut partitioning decision and wrong fw_gm intermediates.
-def _make_hop_minimal_decomp_table() -> dict:
-    from torch._decomp.decompositions import nop_decomposition, sym_numel
-
-    return {
-        torch.ops.aten.sym_numel.default: sym_numel,
-        torch.ops.aten.detach.default: nop_decomposition,
-    }
-
-
 def create_hop_joint_graph(
     fw_fn: Callable,
     fw_args: tuple[torch.Tensor | torch.SymInt, ...],
     functionalize: bool,
 ) -> HopJointGraph:
-    decomp = _make_hop_minimal_decomp_table()
-    fw_gm = materialize_as_graph(
-        fw_fn, fw_args, force_enable_grad=True, subgraph_decomp_table=decomp
-    )
+    fw_gm = materialize_as_graph(fw_fn, fw_args, force_enable_grad=True)
     fw_gm_output_nodes = _find_hop_subgraph_outputs(fw_gm)
 
     if not all(
@@ -349,10 +331,7 @@ def create_hop_joint_graph(
 
     joint_fn = create_bw_fn(fw_fn, fw_args, return_fw_outputs=True)
     joint_gm = materialize_as_graph(
-        joint_fn,
-        fw_args + example_grads,
-        force_enable_grad=True,
-        subgraph_decomp_table=decomp,
+        joint_fn, fw_args + example_grads, force_enable_grad=True
     )
     if functionalize:
         # Need to first trace out the joint_fn with autograd info on
@@ -361,7 +340,6 @@ def create_hop_joint_graph(
             # pyrefly: ignore [bad-argument-type]
             torch.func.functionalize(joint_gm, remove="mutations_and_views"),
             fw_args + example_grads,
-            subgraph_decomp_table=decomp,
         )
 
     return HopJointGraph(
